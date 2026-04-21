@@ -1,31 +1,18 @@
 def resolve_duplicate(title, year, search_func, fetch_func):
-    """
-    Handle duplicate movie titles:
-    - If year is given → match exact year
-    - Else → pick highest rated movie
-    """
-
     results = search_func(title)
-
     if not results:
         return None
-
-    # 🎯 CASE 1: Year provided
     if year:
         for movie in results:
             if movie.get("Year") == str(year):
                 return fetch_func(movie.get("Title"), year)
-
-    # 🎯 CASE 2: No year → pick highest rated
     best_movie = None
     best_rating = 0
 
     for movie in results:
         data = fetch_func(movie.get("Title"))
-
         if not data:
             continue
-
         try:
             rating = float(data.get("imdbRating", 0))
         except:
@@ -34,26 +21,16 @@ def resolve_duplicate(title, year, search_func, fetch_func):
         if rating > best_rating:
             best_rating = rating
             best_movie = data
-
     return best_movie
 
-
 def enrich_data(df, search_func, fetch_func):
-    """
-    Enrich CSV data with API metadata
-    """
-
     enriched = []
 
     for _, row in df.iterrows():
         title = row.get('title')
-
-        # ⚠️ Skip invalid titles
         if not title or str(title).strip() == "":
             continue
-
         year = row.get('year')
-
         movie = resolve_duplicate(
             title,
             year,
@@ -63,13 +40,10 @@ def enrich_data(df, search_func, fetch_func):
 
         if not movie:
             continue
-
-        # 🎯 Extract fields safely
         try:
             rating = float(movie.get("imdbRating", 0)) if movie.get("imdbRating") != "N/A" else 0
         except:
             rating = 0
-
         try:
             runtime = int(movie.get("Runtime").split()[0]) if movie.get("Runtime") != "N/A" else 0
         except:
