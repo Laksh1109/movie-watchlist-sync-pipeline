@@ -1,31 +1,70 @@
-from ingestion import load_watchlist
-from api_client import search_movies, fetch_movie_data
-from processing import enrich_data
-from storage import init_db, insert_movies
-from ranking import rank_movies
-from export import export_playlist
+import pandas as pd
+import requests
 
-# Step 1: Load CSV
-df = load_watchlist("Want_to_Watch.csv")
+API_KEY = "7989f01f"
 
-# Step 2: Process + Enrich
-data = enrich_data(df, search_movies, fetch_movie_data)
+# csv file load kar rahe
+df = pd.read_csv("Want_to_Watch.csv")
 
+movies = []
 
-# Step 3: Store in DB
-init_db()
-insert_movies(data)
+# har movie ke liye loop
+for i, row in df.iterrows():
+    name = row["title"]
 
-print("✅ Data saved to database")  
+    print("checking movie:", name)
 
-# Step 4: Ranking
-ranked = rank_movies(data)
+    # api call
+    url = f"http://www.omdbapi.com/?t={name}&apikey={API_KEY}"
+    res = requests.get(url)
+    movie = res.json()
 
-# Step 5: Top 5 recommendations
-playlist = ranked[:5]
+    # agar movie nahi mili toh skip
+    if movie.get("Response") == "False":
+        print("not found:", name)
+        continue
 
-print("\n🎬 Weekend Playlist:")
-for movie in playlist:
-    print(movie['title'], "-", movie['rating'])
+    # rating handle
+    rating = movie.get("imdbRating")
+    if rating == "N/A":
+        rating = 0
+    else:
+        rating = float(rating)
 
-export_playlist(playlist)
+    # runtime handle
+    runtime = movie.get("Runtime")
+    if runtime == "N/A":
+        runtime = 0
+    else:
+        runtime = int(runtime.split()[0])
+
+    # data store kar rahe list me
+    movies.append({
+        "title": movie.get("Title"),
+        "rating": rating,
+        "genre": movie.get("Genre"),
+        "runtime": runtime,
+        "year": movie.get("Year")
+    })
+
+# simple ranking logic (rating + short movie bonus)
+for m in movies:
+    if m["runtime"] != 0:
+        m["score"] = m["rating"] + (1 / m["runtime"])
+    else:
+        m["score"] = m["rating"]
+
+# sort kar diya best se worst
+movies.sort(key=lambda x: x["score"], reverse=True)
+
+# top 5 movies
+top_movies = movies[:5]
+
+print("\nWeekend Playlist: ")
+for m in top_movies:
+    print(m["title"], "->", m["rating"])
+
+# csv me save
+pd.DataFrame(top_movies).to_csv("Weekend_Playlist.csv", index=False)
+
+print("Done")
